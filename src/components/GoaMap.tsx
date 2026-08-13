@@ -60,61 +60,86 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
 
   useEffect(() => {
     if (!container.current || map.current) return;
-    const m = new maplibregl.Map({
-      container: container.current,
-      style: "https://tiles.openfreemap.org/styles/liberty",
-      center: [73.83, 15.42],
-      zoom: 8.6,
-      pitch: 40,
-      bearing: -12,
-      attributionControl: { compact: true },
-    });
+
+    const styleUrl = "https://tiles.openfreemap.org/styles/liberty";
+    const fallbackStyle = "https://demotiles.maplibre.org/style.json";
+
+    let m: MLMap;
+    try {
+      m = new maplibregl.Map({
+        container: container.current,
+        style: styleUrl,
+        center: [73.83, 15.42],
+        zoom: 8.6,
+        pitch: 40,
+        bearing: -12,
+        attributionControl: { compact: true },
+      });
+    } catch (err) {
+      console.warn("Primary map init failed, using fallback style", err);
+      m = new maplibregl.Map({
+        container: container.current,
+        style: fallbackStyle,
+        center: [73.83, 15.42],
+        zoom: 8.6,
+        pitch: 40,
+        bearing: -12,
+        attributionControl: { compact: true },
+      });
+    }
+
     map.current = m;
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
-    m.on("load", () => {
-      // Real terrain elevation (Terrarium DEM tiles).
+    // Suppress non-fatal tile errors (e.g. DEM tile CORS or 404 warnings)
+    m.on("error", (e) => {
+      if (e?.error?.message?.includes("dem") || (e as { sourceId?: string })?.sourceId === "dem") {
+        try {
+          m.setTerrain(null);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
+    const setupMapContent = () => {
+      if (ready.current || !map.current) return;
+      ready.current = true;
+
+      // 1. Signal Layers & Markers (Base Map features)
       try {
-        m.addSource("dem", {
-          type: "raster-dem",
-          tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-          encoding: "terrarium",
-          tileSize: 256,
-          maxzoom: 14,
-          attribution: "Terrain: Mapzen / AWS Open Data",
-        });
-        m.setTerrain({ source: "dem", exaggeration: 1.4 });
-      } catch {
-        /* terrain optional */
+        if (!m.getSource("hh-signals")) {
+          m.addSource("hh-signals", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          });
+          m.addLayer({
+            id: "hh-signals-glow",
+            type: "line",
+            source: "hh-signals",
+            paint: {
+              "line-color": ["get", "color"],
+              "line-width": 9,
+              "line-blur": 10,
+              "line-opacity": 0.35,
+            },
+          });
+          m.addLayer({
+            id: "hh-signals-line",
+            type: "line",
+            source: "hh-signals",
+            paint: {
+              "line-color": ["get", "color"],
+              "line-width": 2.2,
+              "line-dasharray": [2, 3],
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("Signal layer init warning:", e);
       }
 
-      m.addSource("hh-signals", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      m.addLayer({
-        id: "hh-signals-glow",
-        type: "line",
-        source: "hh-signals",
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 9,
-          "line-blur": 10,
-          "line-opacity": 0.35,
-        },
-      });
-      m.addLayer({
-        id: "hh-signals-line",
-        type: "line",
-        source: "hh-signals",
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 2.2,
-          "line-dasharray": [2, 3],
-        },
-      });
-
-      // Custom Hacker House layer markers on the real map.
+      // Custom Hacker House markers
       new maplibregl.Marker({
         element: markerEl("hh", "HACKER HOUSE GOA", "HH26 · GOA NODE", () => enterRef.current()),
       })
@@ -134,10 +159,34 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         .addTo(m);
 
       m.resize();
-      ready.current = true;
       m.flyTo({ ...CAMERA.enter, duration: 2600, essential: true });
 
-      // Pulsing signal glow — paused when hidden or in wave stage to conserve GPU/CPU resources.
+      // 2. Optional Terrain DEM (Non-blocking, failure-safe)
+      setTimeout(() => {
+        if (!map.current) return;
+        try {
+          if (!m.getSource("dem")) {
+            m.addSource("dem", {
+              type: "raster-dem",
+              tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+              encoding: "terrarium",
+              tileSize: 256,
+              maxzoom: 14,
+              attribution: "Terrain: Mapzen / AWS Open Data",
+            });
+            m.setTerrain({ source: "dem", exaggeration: 1.2 });
+          }
+        } catch (err) {
+          console.warn("Optional terrain disabled:", err);
+          try {
+            m.setTerrain(null);
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 400);
+
+      // Pulsing signal glow — paused when hidden or in wave stage
       let t = 0;
       let raf: number;
       const tick = () => {
@@ -154,12 +203,26 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       };
       raf = requestAnimationFrame(tick);
       m.once("remove", () => cancelAnimationFrame(raf));
+    };
+
+    m.on("load", setupMapContent);
+    m.on("style.load", () => {
+      m.resize();
     });
+
+    const loadTimeout = setTimeout(() => {
+      if (!ready.current && map.current) {
+        setupMapContent();
+      }
+    }, 3500);
 
     const ro = new ResizeObserver(() => m.resize());
     ro.observe(container.current);
+    const resizeTimer = setTimeout(() => m.resize(), 150);
 
     return () => {
+      clearTimeout(loadTimeout);
+      clearTimeout(resizeTimer);
       ro.disconnect();
       map.current?.remove();
       map.current = null;
