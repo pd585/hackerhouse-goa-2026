@@ -120,6 +120,8 @@ export default function PhotoEditor({ photo, crop, onPhoto, onCrop }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <input
+        id="photo-file-input"
+        name="photoFile"
         ref={input}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/*"
@@ -164,6 +166,8 @@ export default function PhotoEditor({ photo, crop, onPhoto, onCrop }: Props) {
           <label className="flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] text-cream/70">
             <ZoomIn className="size-3.5 text-gold" /> ZOOM
             <input
+              id="photo-zoom-input"
+              name="photoZoom"
               type="range"
               min={1}
               max={3}

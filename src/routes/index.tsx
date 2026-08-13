@@ -342,6 +342,8 @@ function SignalMap() {
             <div className="flex flex-col gap-3">
               <Field label="BUILDER NAME">
                 <input
+                  id="builder-name-input"
+                  name="builderName"
                   value={data.name}
                   onChange={(e) => patch({ name: e.target.value })}
                   placeholder="DANNY"
@@ -436,6 +438,8 @@ function SignalMap() {
           title="WHO ARE YOU BUILDING WITH?"
         >
           <input
+            id="team-name-input"
+            name="teamName"
             value={data.teamName}
             onChange={(e) => patch({ teamName: e.target.value })}
             placeholder="SIGNALSEEKERS"

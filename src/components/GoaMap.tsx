@@ -262,9 +262,8 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
             source: "hh-signals",
             paint: {
               "line-color": ["get", "color"],
-              "line-width": 3.2,
-              "line-opacity": 0.92,
-              "line-dasharray": [3, 2],
+              "line-width": 3.8,
+              "line-opacity": 0.95,
             },
           });
         }
@@ -379,6 +378,39 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     const ro = new ResizeObserver(() => m.resize());
     ro.observe(container.current);
     const resizeTimer = setTimeout(() => m.resize(), 150);
+
+    // Runtime window diagnostic tool for production inspection
+    if (typeof window !== "undefined") {
+      (window as unknown as Record<string, unknown>)["__HH_SIGNAL_DIAGNOSTICS__"] = () => {
+        const instance = map.current;
+        if (!instance) return "Map not mounted";
+        const src = instance.getSource("hh-signals") as maplibregl.GeoJSONSource | undefined;
+        const features = buildSignalFeatures();
+        const diag = {
+          stage: stageRef.current,
+          sourceExists: !!src,
+          glowLayerExists: !!instance.getLayer("hh-signals-glow"),
+          lineLayerExists: !!instance.getLayer("hh-signals-line"),
+          lineOpacity: instance.getPaintProperty("hh-signals-line", "line-opacity"),
+          lineWidth: instance.getPaintProperty("hh-signals-line", "line-width"),
+          glowOpacity: instance.getPaintProperty("hh-signals-glow", "line-opacity"),
+          glowWidth: instance.getPaintProperty("hh-signals-glow", "line-width"),
+          featureCount: features.length,
+          features: features.map((f) => {
+            const coords = (f.geometry as GeoJSON.LineString).coordinates;
+            const props = (f.properties || {}) as Record<string, unknown>;
+            return {
+              kind: props["kind"],
+              color: props["color"],
+              start: coords[0],
+              end: coords[coords.length - 1],
+            };
+          }),
+        };
+        console.log("=== HACKERHOUSE SIGNAL DIAGNOSTICS ===", diag);
+        return diag;
+      };
+    }
 
     return () => {
       clearTimeout(fallbackTimer);
