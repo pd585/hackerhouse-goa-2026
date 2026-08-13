@@ -49,6 +49,33 @@ function markerEl(kind: string, label: string, sub: string, onClick?: () => void
   return el;
 }
 
+const CARTO_DARK_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    "carto-dark": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    },
+  },
+  layers: [
+    {
+      id: "carto-dark-layer",
+      type: "raster",
+      source: "carto-dark",
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+};
+
 function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
@@ -61,14 +88,13 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
   useEffect(() => {
     if (!container.current || map.current) return;
 
-    const styleUrl = "https://tiles.openfreemap.org/styles/liberty";
-    const fallbackStyle = "https://demotiles.maplibre.org/style.json";
+    const primaryStyleUrl = "https://tiles.openfreemap.org/styles/liberty";
 
     let m: MLMap;
     try {
       m = new maplibregl.Map({
         container: container.current,
-        style: styleUrl,
+        style: primaryStyleUrl,
         center: [73.83, 15.42],
         zoom: 8.6,
         pitch: 40,
@@ -76,10 +102,10 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         attributionControl: { compact: true },
       });
     } catch (err) {
-      console.warn("Primary map init failed, using fallback style", err);
+      console.warn("Primary vector style failed, using CartoDB Dark raster basemap:", err);
       m = new maplibregl.Map({
         container: container.current,
-        style: fallbackStyle,
+        style: CARTO_DARK_STYLE,
         center: [73.83, 15.42],
         zoom: 8.6,
         pitch: 40,
@@ -91,11 +117,13 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     map.current = m;
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
-    // Suppress non-fatal tile errors (e.g. DEM tile CORS or 404 warnings)
+    // Explicit error diagnostic logging
     m.on("error", (e) => {
-      if (e?.error?.message?.includes("dem") || (e as { sourceId?: string })?.sourceId === "dem") {
+      console.warn("MapLibre event diagnostic:", e);
+      // If primary vector style or tiles throw errors, fallback to CartoDB Dark raster style
+      if (!ready.current) {
         try {
-          m.setTerrain(null);
+          m.setStyle(CARTO_DARK_STYLE);
         } catch {
           /* ignore */
         }
@@ -136,7 +164,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
           });
         }
       } catch (e) {
-        console.warn("Signal layer init warning:", e);
+        console.warn("Signal layer setup warning:", e);
       }
 
       // Custom Hacker House markers
@@ -160,31 +188,6 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
 
       m.resize();
       m.flyTo({ ...CAMERA.enter, duration: 2600, essential: true });
-
-      // 2. Optional Terrain DEM (Non-blocking, failure-safe)
-      setTimeout(() => {
-        if (!map.current) return;
-        try {
-          if (!m.getSource("dem")) {
-            m.addSource("dem", {
-              type: "raster-dem",
-              tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-              encoding: "terrarium",
-              tileSize: 256,
-              maxzoom: 14,
-              attribution: "Terrain: Mapzen / AWS Open Data",
-            });
-            m.setTerrain({ source: "dem", exaggeration: 1.2 });
-          }
-        } catch (err) {
-          console.warn("Optional terrain disabled:", err);
-          try {
-            m.setTerrain(null);
-          } catch {
-            /* ignore */
-          }
-        }
-      }, 400);
 
       // Pulsing signal glow — paused when hidden or in wave stage
       let t = 0;
@@ -210,18 +213,24 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       m.resize();
     });
 
-    const loadTimeout = setTimeout(() => {
+    // High-reliability fallback if vector style load stalls beyond 1.8s
+    const fallbackTimer = setTimeout(() => {
       if (!ready.current && map.current) {
+        try {
+          m.setStyle(CARTO_DARK_STYLE);
+        } catch {
+          /* ignore */
+        }
         setupMapContent();
       }
-    }, 3500);
+    }, 1800);
 
     const ro = new ResizeObserver(() => m.resize());
     ro.observe(container.current);
     const resizeTimer = setTimeout(() => m.resize(), 150);
 
     return () => {
-      clearTimeout(loadTimeout);
+      clearTimeout(fallbackTimer);
       clearTimeout(resizeTimer);
       ro.disconnect();
       map.current?.remove();
