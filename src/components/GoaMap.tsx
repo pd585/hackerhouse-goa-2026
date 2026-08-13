@@ -231,29 +231,19 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     map.current = m;
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
-    m.on("error", (e) => {
-      console.warn("MapLibre event diagnostic:", e);
-      if (!ready.current) {
-        try {
-          m.setStyle(CARTO_VOYAGER_STYLE);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
+    const ensureSignalLayers = () => {
+      const instance = map.current;
+      if (!instance || !instance.isStyleLoaded()) return;
 
-    const setupMapContent = () => {
-      if (ready.current || !map.current) return;
-      ready.current = true;
-
-      // 1. Signal Layers (High visibility on LIGHT map)
       try {
-        if (!m.getSource("hh-signals")) {
-          m.addSource("hh-signals", {
+        if (!instance.getSource("hh-signals")) {
+          instance.addSource("hh-signals", {
             type: "geojson",
             data: { type: "FeatureCollection", features: buildSignalFeatures() },
           });
-          m.addLayer({
+        }
+        if (!instance.getLayer("hh-signals-glow")) {
+          instance.addLayer({
             id: "hh-signals-glow",
             type: "line",
             source: "hh-signals",
@@ -264,7 +254,9 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
               "line-opacity": 0.45,
             },
           });
-          m.addLayer({
+        }
+        if (!instance.getLayer("hh-signals-line")) {
+          instance.addLayer({
             id: "hh-signals-line",
             type: "line",
             source: "hh-signals",
@@ -276,69 +268,98 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
             },
           });
         }
-      } catch (e) {
-        console.warn("Signal layer setup warning:", e);
-      }
 
-      // 2. Custom Hacker House DOM Markers
-      new maplibregl.Marker({
-        element: markerEl("hh", "HACKER HOUSE GOA", "HH26 · GOA NODE", () => enterRef.current()),
-      })
-        .setLngLat(NODES.hackerHouse.coord)
-        .addTo(m);
-      new maplibregl.Marker({ element: markerEl("cove", "BUILDER COVE", "IDENTITY") })
-        .setLngLat(NODES.builderCove.coord)
-        .addTo(m);
-      new maplibregl.Marker({ element: markerEl("bay", "STACK BAY", "SIGNAL SOURCE") })
-        .setLngLat(NODES.stackBay.coord)
-        .addTo(m);
-      new maplibregl.Marker({ element: markerEl("team", "TEAM NODE", "CONNECTION") })
-        .setLngLat(NODES.teamNode.coord)
-        .addTo(m);
-      new maplibregl.Marker({ element: markerEl("light", "SIGNAL LIGHTHOUSE", "BROADCAST") })
-        .setLngLat(NODES.lighthouse.coord)
-        .addTo(m);
+        if (!ready.current) {
+          // Custom Hacker House DOM Markers
+          new maplibregl.Marker({
+            element: markerEl("hh", "HACKER HOUSE GOA", "HH26 · GOA NODE", () =>
+              enterRef.current(),
+            ),
+          })
+            .setLngLat(NODES.hackerHouse.coord)
+            .addTo(instance);
+          new maplibregl.Marker({ element: markerEl("cove", "BUILDER COVE", "IDENTITY") })
+            .setLngLat(NODES.builderCove.coord)
+            .addTo(instance);
+          new maplibregl.Marker({ element: markerEl("bay", "STACK BAY", "SIGNAL SOURCE") })
+            .setLngLat(NODES.stackBay.coord)
+            .addTo(instance);
+          new maplibregl.Marker({ element: markerEl("team", "TEAM NODE", "CONNECTION") })
+            .setLngLat(NODES.teamNode.coord)
+            .addTo(instance);
+          new maplibregl.Marker({ element: markerEl("light", "SIGNAL LIGHTHOUSE", "BROADCAST") })
+            .setLngLat(NODES.lighthouse.coord)
+            .addTo(instance);
 
-      m.resize();
-      m.flyTo({ ...CAMERA.enter, duration: 2600, essential: true });
-
-      // Trigger initial signal line update immediately
-      updateSignals();
-
-      // Pulsing signal glow — paused when hidden or in wave stage
-      let t = 0;
-      let raf: number;
-      const tick = () => {
-        if (map.current && stageRef.current !== "wave" && !document.hidden) {
-          t += 0.02;
-          try {
-            m.setPaintProperty("hh-signals-line", "line-opacity", 0.75 + Math.sin(t) * 0.22);
-            m.setPaintProperty("hh-signals-glow", "line-opacity", 0.38 + Math.sin(t + 1) * 0.15);
-          } catch {
-            /* layer not ready */
-          }
+          instance.resize();
+          instance.flyTo({ ...CAMERA.enter, duration: 2600, essential: true });
+          ready.current = true;
         }
-        raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-      m.once("remove", () => cancelAnimationFrame(raf));
+
+        updateSignals();
+      } catch (e) {
+        console.error("Signal layer initialization error:", e);
+      }
     };
 
-    m.on("load", setupMapContent);
-    m.on("style.load", () => {
-      m.resize();
-      if (ready.current) updateSignals();
-    });
-
-    // High-reliability fallback to CARTO_LIGHT_STYLE if vector style load stalls beyond 1.8s
-    const fallbackTimer = setTimeout(() => {
+    m.on("error", (e) => {
+      console.warn("MapLibre error diagnostic:", e);
       if (!ready.current && map.current) {
         try {
-          m.setStyle(CARTO_VOYAGER_STYLE);
+          map.current.setStyle(CARTO_VOYAGER_STYLE);
         } catch {
           /* ignore */
         }
-        setupMapContent();
+      }
+    });
+
+    m.on("style.load", () => {
+      m.resize();
+      ensureSignalLayers();
+    });
+
+    m.on("load", () => {
+      ensureSignalLayers();
+    });
+
+    // Pulsing signal glow — paused when hidden or in wave stage
+    let t = 0;
+    let raf: number;
+    const tick = () => {
+      if (map.current && stageRef.current !== "wave" && !document.hidden) {
+        t += 0.02;
+        try {
+          if (map.current.getLayer("hh-signals-line")) {
+            map.current.setPaintProperty(
+              "hh-signals-line",
+              "line-opacity",
+              0.75 + Math.sin(t) * 0.22,
+            );
+          }
+          if (map.current.getLayer("hh-signals-glow")) {
+            map.current.setPaintProperty(
+              "hh-signals-glow",
+              "line-opacity",
+              0.38 + Math.sin(t + 1) * 0.15,
+            );
+          }
+        } catch {
+          /* layer not ready */
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    m.once("remove", () => cancelAnimationFrame(raf));
+
+    // High-reliability fallback to CARTO_VOYAGER_STYLE if primary style load stalls
+    const fallbackTimer = setTimeout(() => {
+      if (!ready.current && map.current) {
+        try {
+          map.current.setStyle(CARTO_VOYAGER_STYLE);
+        } catch {
+          /* ignore */
+        }
       }
     }, 1800);
 
