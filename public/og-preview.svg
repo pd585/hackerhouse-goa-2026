@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#073F23"/>
+  <rect x="40" y="40" width="1120" height="550" fill="none" stroke="#F5DE19" stroke-width="4"/>
+  <rect x="56" y="56" width="1088" height="518" fill="none" stroke="#F6F2E3" stroke-width="1" stroke-opacity="0.3"/>
+  <text x="80" y="130" font-family="Space Grotesk, sans-serif" font-size="44" font-weight="bold" fill="#F5DE19" letter-spacing="4">HACKER HOUSE GOA 2026</text>
+  <text x="80" y="180" font-family="JetBrains Mono, monospace" font-size="20" fill="#F4237F" letter-spacing="6">REAL GOA 3D MAP · BUILDER IDENTITY</text>
+  <text x="80" y="320" font-family="Bodoni Moda, serif" font-size="88" font-weight="bold" fill="#F6F2E3">BUILDER SIGNAL MAP</text>
+  <text x="80" y="400" font-family="JetBrains Mono, monospace" font-size="24" fill="rgba(246,242,227,0.8)" letter-spacing="3">LESS NOISE. MORE SIGNAL.</text>
+  <text x="80" y="460" font-family="JetBrains Mono, monospace" font-size="18" fill="#F5DE19" letter-spacing="4">NO LOGIN · NO SIGNUP · INSTANT GENERATION &amp; SHARE</text>
+  <rect x="80" y="496" width="340" height="56" fill="#F4237F" rx="4"/>
+  <text x="115" y="534" font-family="Space Grotesk, sans-serif" font-size="20" font-weight="bold" fill="#F6F2E3" letter-spacing="3">ENTER THE NETWORK →</text>
+</svg>
