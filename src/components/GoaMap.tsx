@@ -2,7 +2,7 @@ import * as maplibregl from "maplibre-gl";
 import type { Map as MLMap } from "maplibre-gl";
 import type { Feature } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { memo, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { NODES, techColor, type Stage } from "@/lib/builder";
 
 interface Props {
@@ -49,16 +49,16 @@ function markerEl(kind: string, label: string, sub: string, onClick?: () => void
   return el;
 }
 
-const CARTO_DARK_STYLE: maplibregl.StyleSpecification = {
+const CARTO_LIGHT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "carto-light": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution:
@@ -67,9 +67,9 @@ const CARTO_DARK_STYLE: maplibregl.StyleSpecification = {
   },
   layers: [
     {
-      id: "carto-dark-layer",
+      id: "carto-light-layer",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-light",
       minzoom: 0,
       maxzoom: 19,
     },
@@ -84,6 +84,119 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
   stageRef.current = stage;
   const enterRef = useRef(onEnterNetwork);
   enterRef.current = onEnterNetwork;
+
+  const buildSignalFeatures = useCallback((): Feature[] => {
+    const features: Feature[] = [];
+    const hh = NODES.hackerHouse.coord;
+    const cove = NODES.builderCove.coord;
+    const bay = NODES.stackBay.coord;
+    const team = NODES.teamNode.coord;
+    const light = NODES.lighthouse.coord;
+
+    // 1. BASE NODE CONNECTIONS — Visually connect all 5 HackerHouse Goa nodes
+    // Hacker House -> Builder Cove
+    features.push({
+      type: "Feature",
+      properties: { color: "#F4237F", kind: "node-link" },
+      geometry: { type: "LineString", coordinates: arc(hh, cove, 0.12) },
+    });
+    // Builder Cove -> Stack Bay
+    features.push({
+      type: "Feature",
+      properties: { color: "#0088FF", kind: "node-link" },
+      geometry: { type: "LineString", coordinates: arc(cove, bay, 0.15) },
+    });
+    // Stack Bay -> Team Node
+    features.push({
+      type: "Feature",
+      properties: { color: "#00E5FF", kind: "node-link" },
+      geometry: { type: "LineString", coordinates: arc(bay, team, 0.18) },
+    });
+    // Team Node -> Signal Lighthouse
+    features.push({
+      type: "Feature",
+      properties: { color: "#39D98A", kind: "node-link" },
+      geometry: { type: "LineString", coordinates: arc(team, light, 0.22) },
+    });
+    // Signal Lighthouse -> Hacker House
+    features.push({
+      type: "Feature",
+      properties: { color: "#F5DE19", kind: "node-link" },
+      geometry: { type: "LineString", coordinates: arc(light, hh, 0.14) },
+    });
+
+    // 2. STACK SELECTION SIGNAL ARCS
+    stack.forEach((tech, i) => {
+      features.push({
+        type: "Feature",
+        properties: { color: techColor(tech), kind: "stack" },
+        geometry: {
+          type: "LineString",
+          coordinates: arc(bay, hh, 0.08 + i * 0.04),
+        },
+      });
+    });
+
+    // 3. BUILDER & TEAM STAGE SIGNALS
+    if (stage !== "enter") {
+      features.push({
+        type: "Feature",
+        properties: { color: "#F5DE19", kind: "builder" },
+        geometry: { type: "LineString", coordinates: arc(cove, hh, 0.28) },
+      });
+    }
+
+    if (teamName.trim()) {
+      features.push({
+        type: "Feature",
+        properties: { color: "#F4237F", kind: "team" },
+        geometry: {
+          type: "LineString",
+          coordinates: arc(cove, team, 0.32),
+        },
+      });
+      features.push({
+        type: "Feature",
+        properties: { color: "#F4237F", kind: "team" },
+        geometry: {
+          type: "LineString",
+          coordinates: arc(team, hh, 0.32),
+        },
+      });
+    }
+
+    // 4. NETWORK & LIGHTHOUSE BROADCAST BEAMS
+    if (stage === "network" || stage === "wave") {
+      features.push({
+        type: "Feature",
+        properties: { color: "#39D98A", kind: "beam" },
+        geometry: { type: "LineString", coordinates: arc(hh, light, 0.1) },
+      });
+      features.push({
+        type: "Feature",
+        properties: { color: "#00E5FF", kind: "beam" },
+        geometry: {
+          type: "LineString",
+          coordinates: arc(NODES.panaji.coord, light, 0.12),
+        },
+      });
+    }
+
+    return features;
+  }, [stack, stage, teamName]);
+
+  const updateSignals = useCallback(() => {
+    const m = map.current;
+    if (!m || !m.getSource("hh-signals")) return;
+    try {
+      (m.getSource("hh-signals") as maplibregl.GeoJSONSource).setData({
+        type: "FeatureCollection",
+        features: buildSignalFeatures(),
+      });
+    } catch (e) {
+      console.warn("Signal update warning:", e);
+    }
+  }, [buildSignalFeatures]);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -102,10 +215,10 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         attributionControl: { compact: true },
       });
     } catch (err) {
-      console.warn("Primary vector style failed, using CartoDB Dark raster basemap:", err);
+      console.warn("Primary vector style failed, using CartoDB Light raster basemap:", err);
       m = new maplibregl.Map({
         container: container.current,
-        style: CARTO_DARK_STYLE,
+        style: CARTO_LIGHT_STYLE,
         center: [73.83, 15.42],
         zoom: 8.6,
         pitch: 40,
@@ -117,13 +230,11 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     map.current = m;
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
-    // Explicit error diagnostic logging
     m.on("error", (e) => {
       console.warn("MapLibre event diagnostic:", e);
-      // If primary vector style or tiles throw errors, fallback to CartoDB Dark raster style
       if (!ready.current) {
         try {
-          m.setStyle(CARTO_DARK_STYLE);
+          m.setStyle(CARTO_LIGHT_STYLE);
         } catch {
           /* ignore */
         }
@@ -134,12 +245,12 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       if (ready.current || !map.current) return;
       ready.current = true;
 
-      // 1. Signal Layers & Markers (Base Map features)
+      // 1. Signal Layers (High visibility on LIGHT map)
       try {
         if (!m.getSource("hh-signals")) {
           m.addSource("hh-signals", {
             type: "geojson",
-            data: { type: "FeatureCollection", features: [] },
+            data: { type: "FeatureCollection", features: buildSignalFeatures() },
           });
           m.addLayer({
             id: "hh-signals-glow",
@@ -147,9 +258,9 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
             source: "hh-signals",
             paint: {
               "line-color": ["get", "color"],
-              "line-width": 9,
-              "line-blur": 10,
-              "line-opacity": 0.35,
+              "line-width": 10,
+              "line-blur": 5,
+              "line-opacity": 0.45,
             },
           });
           m.addLayer({
@@ -158,8 +269,9 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
             source: "hh-signals",
             paint: {
               "line-color": ["get", "color"],
-              "line-width": 2.2,
-              "line-dasharray": [2, 3],
+              "line-width": 3.2,
+              "line-opacity": 0.92,
+              "line-dasharray": [3, 2],
             },
           });
         }
@@ -167,7 +279,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         console.warn("Signal layer setup warning:", e);
       }
 
-      // Custom Hacker House markers
+      // 2. Custom Hacker House DOM Markers
       new maplibregl.Marker({
         element: markerEl("hh", "HACKER HOUSE GOA", "HH26 · GOA NODE", () => enterRef.current()),
       })
@@ -189,6 +301,9 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       m.resize();
       m.flyTo({ ...CAMERA.enter, duration: 2600, essential: true });
 
+      // Trigger initial signal line update immediately
+      updateSignals();
+
       // Pulsing signal glow — paused when hidden or in wave stage
       let t = 0;
       let raf: number;
@@ -196,8 +311,8 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         if (map.current && stageRef.current !== "wave" && !document.hidden) {
           t += 0.02;
           try {
-            m.setPaintProperty("hh-signals-line", "line-opacity", 0.55 + Math.sin(t) * 0.35);
-            m.setPaintProperty("hh-signals-glow", "line-opacity", 0.28 + Math.sin(t + 1) * 0.14);
+            m.setPaintProperty("hh-signals-line", "line-opacity", 0.75 + Math.sin(t) * 0.22);
+            m.setPaintProperty("hh-signals-glow", "line-opacity", 0.38 + Math.sin(t + 1) * 0.15);
           } catch {
             /* layer not ready */
           }
@@ -211,13 +326,14 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     m.on("load", setupMapContent);
     m.on("style.load", () => {
       m.resize();
+      if (ready.current) updateSignals();
     });
 
-    // High-reliability fallback if vector style load stalls beyond 1.8s
+    // High-reliability fallback to CARTO_LIGHT_STYLE if vector style load stalls beyond 1.8s
     const fallbackTimer = setTimeout(() => {
       if (!ready.current && map.current) {
         try {
-          m.setStyle(CARTO_DARK_STYLE);
+          m.setStyle(CARTO_LIGHT_STYLE);
         } catch {
           /* ignore */
         }
@@ -236,6 +352,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       map.current?.remove();
       map.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Camera follows the journey.
@@ -248,75 +365,9 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
 
   // Stack + team drive the real signal routes (debounced to keep typing instant).
   useEffect(() => {
-    const m = map.current;
-    if (!m || !m.getSource("hh-signals")) return;
-
-    const updateSignals = () => {
-      if (!map.current || !map.current.getSource("hh-signals")) return;
-      const features: Feature[] = [];
-      const hh = NODES.hackerHouse.coord;
-
-      stack.forEach((tech, i) => {
-        features.push({
-          type: "Feature",
-          properties: { color: techColor(tech), kind: "stack" },
-          geometry: {
-            type: "LineString",
-            coordinates: arc(NODES.stackBay.coord, hh, 0.05 + i * 0.035),
-          },
-        });
-      });
-
-      if (stage !== "enter") {
-        features.push({
-          type: "Feature",
-          properties: { color: "#F5DE19", kind: "builder" },
-          geometry: { type: "LineString", coordinates: arc(NODES.builderCove.coord, hh, 0.5) },
-        });
-      }
-      if (teamName.trim()) {
-        features.push({
-          type: "Feature",
-          properties: { color: "#F4237F", kind: "team" },
-          geometry: {
-            type: "LineString",
-            coordinates: arc(NODES.builderCove.coord, NODES.teamNode.coord, 0.35),
-          },
-        });
-        features.push({
-          type: "Feature",
-          properties: { color: "#F4237F", kind: "team" },
-          geometry: {
-            type: "LineString",
-            coordinates: arc(NODES.teamNode.coord, hh, 0.35),
-          },
-        });
-      }
-      if (stage === "network" || stage === "wave") {
-        features.push({
-          type: "Feature",
-          properties: { color: "#39D98A", kind: "beam" },
-          geometry: { type: "LineString", coordinates: arc(hh, NODES.lighthouse.coord, 0.1) },
-        });
-        features.push({
-          type: "Feature",
-          properties: { color: "#4FC3F7", kind: "beam" },
-          geometry: {
-            type: "LineString",
-            coordinates: arc(NODES.panaji.coord, NODES.lighthouse.coord, 0.12),
-          },
-        });
-      }
-
-      (map.current.getSource("hh-signals") as maplibregl.GeoJSONSource).setData({
-        type: "FeatureCollection",
-        features,
-      });
-    };
-
-    const timer = setTimeout(updateSignals, 200);
+    const timer = setTimeout(updateSignals, 150);
     return () => clearTimeout(timer);
-  }, [stack, teamName, stage]);
+  }, [updateSignals]);
 
   return (
     <div className="absolute inset-0">
