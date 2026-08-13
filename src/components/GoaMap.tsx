@@ -49,16 +49,16 @@ function markerEl(kind: string, label: string, sub: string, onClick?: () => void
   return el;
 }
 
-const CARTO_LIGHT_STYLE: maplibregl.StyleSpecification = {
+const CARTO_VOYAGER_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    "carto-light": {
+    "carto-voyager": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution:
@@ -67,9 +67,9 @@ const CARTO_LIGHT_STYLE: maplibregl.StyleSpecification = {
   },
   layers: [
     {
-      id: "carto-light-layer",
+      id: "carto-voyager-layer",
       type: "raster",
-      source: "carto-light",
+      source: "carto-voyager",
       minzoom: 0,
       maxzoom: 19,
     },
@@ -93,84 +93,85 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     const team = NODES.teamNode.coord;
     const light = NODES.lighthouse.coord;
 
-    // 1. BASE NODE CONNECTIONS — Visually connect all 5 HackerHouse Goa nodes
-    // Hacker House -> Builder Cove
-    features.push({
-      type: "Feature",
-      properties: { color: "#F4237F", kind: "node-link" },
-      geometry: { type: "LineString", coordinates: arc(hh, cove, 0.12) },
-    });
-    // Builder Cove -> Stack Bay
-    features.push({
-      type: "Feature",
-      properties: { color: "#0088FF", kind: "node-link" },
-      geometry: { type: "LineString", coordinates: arc(cove, bay, 0.15) },
-    });
-    // Stack Bay -> Team Node
-    features.push({
-      type: "Feature",
-      properties: { color: "#00E5FF", kind: "node-link" },
-      geometry: { type: "LineString", coordinates: arc(bay, team, 0.18) },
-    });
-    // Team Node -> Signal Lighthouse
-    features.push({
-      type: "Feature",
-      properties: { color: "#39D98A", kind: "node-link" },
-      geometry: { type: "LineString", coordinates: arc(team, light, 0.22) },
-    });
-    // Signal Lighthouse -> Hacker House
-    features.push({
-      type: "Feature",
-      properties: { color: "#F5DE19", kind: "node-link" },
-      geometry: { type: "LineString", coordinates: arc(light, hh, 0.14) },
-    });
-
-    // 2. STACK SELECTION SIGNAL ARCS
-    stack.forEach((tech, i) => {
+    // 1. Stage 01 (builder / enter): Hacker House -> Builder Cove
+    if (
+      stage === "builder" ||
+      stage === "stack" ||
+      stage === "team" ||
+      stage === "network" ||
+      stage === "wave"
+    ) {
       features.push({
         type: "Feature",
-        properties: { color: techColor(tech), kind: "stack" },
-        geometry: {
-          type: "LineString",
-          coordinates: arc(bay, hh, 0.08 + i * 0.04),
-        },
-      });
-    });
-
-    // 3. BUILDER & TEAM STAGE SIGNALS
-    if (stage !== "enter") {
-      features.push({
-        type: "Feature",
-        properties: { color: "#F5DE19", kind: "builder" },
-        geometry: { type: "LineString", coordinates: arc(cove, hh, 0.28) },
+        properties: { color: "#F4237F", kind: "node-link" }, // Vibrant Neon Pink
+        geometry: { type: "LineString", coordinates: arc(hh, cove, 0.12) },
       });
     }
 
-    if (teamName.trim()) {
+    // 2. Stage 02 (stack): Builder Cove -> Stack Bay (+ tech stack signal arcs)
+    if (stage === "stack" || stage === "team" || stage === "network" || stage === "wave") {
       features.push({
         type: "Feature",
-        properties: { color: "#F4237F", kind: "team" },
-        geometry: {
-          type: "LineString",
-          coordinates: arc(cove, team, 0.32),
-        },
+        properties: { color: "#0077FF", kind: "node-link" }, // Vibrant Signal Blue
+        geometry: { type: "LineString", coordinates: arc(cove, bay, 0.15) },
       });
-      features.push({
-        type: "Feature",
-        properties: { color: "#F4237F", kind: "team" },
-        geometry: {
-          type: "LineString",
-          coordinates: arc(team, hh, 0.32),
-        },
+
+      // Technology stack arcs from Stack Bay to Hacker House
+      stack.forEach((tech, i) => {
+        features.push({
+          type: "Feature",
+          properties: { color: techColor(tech), kind: "stack" },
+          geometry: {
+            type: "LineString",
+            coordinates: arc(bay, hh, 0.08 + i * 0.04),
+          },
+        });
       });
     }
 
-    // 4. NETWORK & LIGHTHOUSE BROADCAST BEAMS
+    // 3. Stage 03 (team): Stack Bay -> Team Node (+ team connection arcs)
+    if (stage === "team" || stage === "network" || stage === "wave") {
+      features.push({
+        type: "Feature",
+        properties: { color: "#00E5FF", kind: "node-link" }, // Vibrant Neon Cyan
+        geometry: { type: "LineString", coordinates: arc(bay, team, 0.18) },
+      });
+
+      if (teamName.trim()) {
+        features.push({
+          type: "Feature",
+          properties: { color: "#F4237F", kind: "team" },
+          geometry: {
+            type: "LineString",
+            coordinates: arc(cove, team, 0.32),
+          },
+        });
+        features.push({
+          type: "Feature",
+          properties: { color: "#F4237F", kind: "team" },
+          geometry: {
+            type: "LineString",
+            coordinates: arc(team, hh, 0.32),
+          },
+        });
+      }
+    }
+
+    // 4. Stage 04 (network / lighthouse): Team Node -> Signal Lighthouse
     if (stage === "network" || stage === "wave") {
       features.push({
         type: "Feature",
-        properties: { color: "#39D98A", kind: "beam" },
-        geometry: { type: "LineString", coordinates: arc(hh, light, 0.1) },
+        properties: { color: "#10B981", kind: "node-link" }, // Tech Emerald Green
+        geometry: { type: "LineString", coordinates: arc(team, light, 0.22) },
+      });
+    }
+
+    // 5. Stage 05 (wave / Broadcast): Complete Broadcast Network Loop
+    if (stage === "wave") {
+      features.push({
+        type: "Feature",
+        properties: { color: "#F5DE19", kind: "broadcast-loop" }, // HackerHouse Gold
+        geometry: { type: "LineString", coordinates: arc(light, hh, 0.14) },
       });
       features.push({
         type: "Feature",
@@ -201,7 +202,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
   useEffect(() => {
     if (!container.current || map.current) return;
 
-    const primaryStyleUrl = "https://tiles.openfreemap.org/styles/liberty";
+    const primaryStyleUrl = "https://tiles.openfreemap.org/styles/bright";
 
     let m: MLMap;
     try {
@@ -215,10 +216,10 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         attributionControl: { compact: true },
       });
     } catch (err) {
-      console.warn("Primary vector style failed, using CartoDB Light raster basemap:", err);
+      console.warn("Primary vector style failed, using CartoDB Voyager light basemap:", err);
       m = new maplibregl.Map({
         container: container.current,
-        style: CARTO_LIGHT_STYLE,
+        style: CARTO_VOYAGER_STYLE,
         center: [73.83, 15.42],
         zoom: 8.6,
         pitch: 40,
@@ -234,7 +235,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
       console.warn("MapLibre event diagnostic:", e);
       if (!ready.current) {
         try {
-          m.setStyle(CARTO_LIGHT_STYLE);
+          m.setStyle(CARTO_VOYAGER_STYLE);
         } catch {
           /* ignore */
         }
@@ -333,7 +334,7 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
     const fallbackTimer = setTimeout(() => {
       if (!ready.current && map.current) {
         try {
-          m.setStyle(CARTO_LIGHT_STYLE);
+          m.setStyle(CARTO_VOYAGER_STYLE);
         } catch {
           /* ignore */
         }
