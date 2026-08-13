@@ -174,31 +174,35 @@
 /* --- Hacker House map layer markers (real map, custom layer) --- */
 .hh-marker {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  width: 14px;
+  height: 14px;
   cursor: default;
   font-family: var(--font-mono);
+  pointer-events: auto;
 }
 .hh-marker__dot {
-  width: 12px;
-  height: 12px;
+  position: absolute;
+  inset: 0;
   border-radius: 999px;
   background: var(--gold);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--deep) 75%, transparent);
-  flex: none;
 }
 .hh-marker__ring {
   position: absolute;
-  left: -8px;
-  top: -8px;
+  left: -7px;
+  top: -7px;
   width: 28px;
   height: 28px;
   border-radius: 999px;
   border: 1.5px solid var(--gold);
   animation: hh-pulse 2.4s ease-out infinite;
+  pointer-events: none;
 }
 .hh-marker__label {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   line-height: 1.1;
@@ -208,6 +212,7 @@
   border: 1px solid color-mix(in oklab, var(--gold) 45%, transparent);
   white-space: nowrap;
   backdrop-filter: blur(2px);
+  pointer-events: none;
 }
 .hh-marker__label b {
   font-size: 10px;

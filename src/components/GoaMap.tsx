@@ -270,24 +270,37 @@ function GoaMapComponent({ stage, stack, teamName, onEnterNetwork }: Props) {
         }
 
         if (!ready.current) {
-          // Custom Hacker House DOM Markers
+          // Custom Hacker House DOM Markers (centered on node coordinates)
           new maplibregl.Marker({
             element: markerEl("hh", "HACKER HOUSE GOA", "HH26 · GOA NODE", () =>
               enterRef.current(),
             ),
+            anchor: "center",
           })
             .setLngLat(NODES.hackerHouse.coord)
             .addTo(instance);
-          new maplibregl.Marker({ element: markerEl("cove", "BUILDER COVE", "IDENTITY") })
+          new maplibregl.Marker({
+            element: markerEl("cove", "BUILDER COVE", "IDENTITY"),
+            anchor: "center",
+          })
             .setLngLat(NODES.builderCove.coord)
             .addTo(instance);
-          new maplibregl.Marker({ element: markerEl("bay", "STACK BAY", "SIGNAL SOURCE") })
+          new maplibregl.Marker({
+            element: markerEl("bay", "STACK BAY", "SIGNAL SOURCE"),
+            anchor: "center",
+          })
             .setLngLat(NODES.stackBay.coord)
             .addTo(instance);
-          new maplibregl.Marker({ element: markerEl("team", "TEAM NODE", "CONNECTION") })
+          new maplibregl.Marker({
+            element: markerEl("team", "TEAM NODE", "CONNECTION"),
+            anchor: "center",
+          })
             .setLngLat(NODES.teamNode.coord)
             .addTo(instance);
-          new maplibregl.Marker({ element: markerEl("light", "SIGNAL LIGHTHOUSE", "BROADCAST") })
+          new maplibregl.Marker({
+            element: markerEl("light", "SIGNAL LIGHTHOUSE", "BROADCAST"),
+            anchor: "center",
+          })
             .setLngLat(NODES.lighthouse.coord)
             .addTo(instance);
 
